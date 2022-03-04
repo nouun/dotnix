@@ -1,0 +1,92 @@
+{ pkgs }:
+pkgs.writeScriptBin "treeshot" ''
+  showhelp() {
+      printf "  Treeshot - L3af's Mediocre Screenshot Wrapper"
+      printf " "
+      printf " Examples"
+      printf "   treeshot -s -w10 -b\\#FF0000"
+      printf "     Screenshot a region and copy to clipboard with a border of 10 pixels colored red."
+      printf " "
+      printf "   treeshot -sbd2"
+      printf "     Screenshot a region after 2 seconds and copy to clipboard without adding a border."
+      printf " "
+      printf "   treeshot -s > selection.png"
+      printf "     Screenshot a region and save to selection.png."
+      printf " "
+      printf "   treeshot -se\"echo \\\$file\""
+      printf "     Screenshot a region and echo the temp file location."
+      printf " "
+      printf " Args"
+      printf "   -h  Show this help menu"
+      printf "   -s  Select region to screenshot (fullscreen by default)"
+      printf "   -b  Disable border (enabled by default)"
+      printf "   -c  Border color (#EDD7BD by default)"
+      printf "   -w  Border width (4 by default)"
+      printf "   -d  Capture delay in seconds"
+      printf "   -e  Execute shell after capturing (Use \$file to access the file)"
+      printf " "
+  }
+
+  selection=0
+  addBorder=1
+  borderWidth=4
+  borderColor="#EDD7BD"
+  delay=0
+  execAfter=""
+
+  while getopts ":hsbd:c:w:e:" arg; do
+      case "$arg" in
+          h) showHelp; exit;;
+          s) selection=1;;
+          b) addBorder=0;;
+          d) delay="$${OPTARG}";;
+          c) borderColor="$${OPTARG}";;
+          w) borderWidth="$${OPTARG}";;
+          e) execAfter="$${OPTARG}";;
+          *) showhelp
+      esac
+  done
+
+  if ! [ "$delay" -eq "$delay" ] 2> /dev/null; then
+      echo "Delay is not set to a valid integer"; exit
+  fi
+
+  if [ "$delay" -lt 0 ]; then
+      echo "Delay cannot be set to less than 0"; exit
+  fi
+
+  # Sleep delay
+  sleep "$delay"
+
+  args="-window root"
+  if [ "$selection" -eq 1 ]; then
+      # Select region
+      slop=$(slop -f "%g") || exit 1
+
+      # Screenshot and crop to specified region
+      args="$args -crop $slop"
+  fi
+
+  # Capture screen
+  import $args /tmp/.treeshot.png
+
+  if [ "$addBorder" -eq 1 ]; then
+      # Add border and shadow
+      convert /tmp/.treeshot.png -bordercolor "$borderColor" -border "$borderWidth" /tmp/.treeshot.png
+  fi
+
+  export file="/tmp/.treeshot.png"
+  eval "$execAfter"
+
+  # Check if running in terminal
+  if [ -t 1 ]; then
+      # Copy to clipboard
+      xclip -selection clipboard -t image/png /tmp/.treeshot.png
+  else
+      # Save to file
+      cp /tmp/.treeshot.png /proc/$$/fd/1
+  fi
+
+  # Remove file
+  rm /tmp/.treeshot.png
+''
